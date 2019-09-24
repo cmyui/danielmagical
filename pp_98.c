@@ -1,20 +1,11 @@
+// A Simple (and pretty beginner-level coded) map/pp finder made by cmyui as (basically) his first project in C.
 #include <stdio.h>
 #include <mysql/mysql.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include </mnt/d/Development/pp_98/oppai.h>
+#include </mnt/d/Development/Misc Tools/pp_98/oppai.h>
 //#include <windows.h>
-
-#define LINUX 1
-
-// SQL
-#define SQL_SERVER "localhost"
-#define SQL_USER "root"
-#define SQL_PASSWD "no"
-#define SQL_DB "ripple"
-
-#define __BeatmapPath "/mnt/d/Development/pp_98/maps/"
 
 #define KNRM  "\x1B[0m"
 #define KRED  "\x1B[31m"
@@ -26,9 +17,14 @@
 #define KGRY  "\x1B[37m"
 #define KRESET "\033[0m"
 
-#ifndef __cplusplus
-typedef unsigned char bool;
-#endif
+//#define DEBUG
+
+// TODO: config
+#define SQL_SERVER "localhost"
+#define SQL_USER "root"
+#define SQL_PASSWD "no"
+#define SQL_DB "ripple"
+#define __BeatmapPath "/mnt/d/Development/Misc Tools/pp_98/maps/"
 
 enum Mods
 {
@@ -67,19 +63,20 @@ enum Mods
 	FreeModAllowed = NoFail | Easy | Hidden | HardRock | SuddenDeath | Flashlight | FadeIn | Relax | Relax2 | SpunOut | KeyMod,
 	ScoreIncreaseMods = Hidden | HardRock | DoubleTime | Flashlight | FadeIn,
 	TimeAltering = DoubleTime | HalfTime | Nightcore
-
 };
 
-void LogError(int x) { printf(KRED "ERROR CODE %i" KRESET "\n", x); }
+#ifdef DEBUG
+    void LogError(int x) { printf(KRED "ERROR CODE %i" KRESET "\n", x); }
+#endif
 
-void _SQL(MYSQL *conn, char Query[]) {
+unsigned char _SQL(MYSQL* conn, char Query[]) {
     if (mysql_query(conn, Query)) {
         fprintf(stderr, KRED "%s" KRESET "\n", mysql_error(conn));
-        exit(1);
-    }
+        return 0;
+    } return 1;
 }
 
-bool GetFileSize(const char* BeatmapPath) {
+unsigned char GetFileSize(const char* BeatmapPath) {
 	FILE *f = fopen(BeatmapPath, "r");
     if (!f) return 0;
 
@@ -87,11 +84,14 @@ bool GetFileSize(const char* BeatmapPath) {
     const int Size = ftell(f);
 
     fclose(f);
-    if (Size >= 100) return 1;
-    return 0;
+
+    if (Size < 100) return 0;
+    return 1;
 }
 
 int main(int argc, char** argv) {
+
+    /* Setup connection with MySQL */
     MYSQL *conn;
     MYSQL *_conn; // TODO: remove
     MYSQL_RES *res;
@@ -100,52 +100,43 @@ int main(int argc, char** argv) {
     conn = mysql_init(NULL);
     if (!mysql_real_connect(conn, SQL_SERVER, SQL_USER, SQL_PASSWD, SQL_DB, 0, NULL, 0)) {
         fprintf(stderr, "%s\n", mysql_error(conn));
-        return 1;
+        return 0;
     }
 
-    _conn = mysql_init(NULL);
-    if (!mysql_real_connect(_conn, SQL_SERVER, SQL_USER, SQL_PASSWD, SQL_DB, 0, NULL, 0)) {
-        fprintf(stderr, "%s\n", mysql_error(_conn));
-        return 1;
-    }
+    if (!_SQL(conn, "SELECT beatmap_id FROM beatmaps WHERE ranked = 2 ORDER BY beatmap_id ASC"))
+        return 0;
 
-    _SQL(conn, "SELECT COUNT(id) FROM beatmaps WHERE ranked = 2");
-    res = mysql_use_result(conn);
+    res = mysql_store_result(conn);
 
-    int row_count;
-    while ((row = mysql_fetch_row(res)) != NULL)
-        row_count = atoi(row[0]);
+    unsigned long long row_count = mysql_num_rows(res);
+    printf(KCYN "Beatmaps found (database): %llu" KRESET "\n", row_count);
 
-
+    // Build beatmap array
     int* BeatmapArray = calloc(row_count, sizeof(int));
-
-    _SQL(conn, "SELECT beatmap_id FROM beatmaps WHERE ranked = 2 ORDER BY beatmap_id ASC");
-
-    res = mysql_use_result(conn);
-    int i = 1; // TODO: learn to for loop this
-    while ((row = mysql_fetch_row(res)) != NULL) {
+    for (int i = 1; (row = mysql_fetch_row(res)) != NULL; i++)
         BeatmapArray[i] = atoi(row[0]);
-        i++;
-    }
+    mysql_free_result(res);
 
     char BeatmapID[12];
     char MapPath[strlen(__BeatmapPath) + 11];
     float PP, MapStars;
 
-    for (i=0; i <= row_count; i++) {
+    for (int i=0; i <= row_count; i++) {
         ezpp_t ez = ezpp_new();
         if (!ez) {
-            printf("Failed to load ezpp.\n");
-            return 1;
+            printf(KRED "\n** Failed to load ezpp. **" KRESET "\n");
+            return 0;
         }
 
-        ezpp_set_mods(ez, Relax);
+        ezpp_set_mods(ez, Relax + HardRock + Hidden + DoubleTime);
         //ezpp_set_nmiss(ez, 0);
         ezpp_set_accuracy_percent(ez, 99.f);
         //ezpp_set_combo(ez, sData.MaxCombo);
         //ezpp_set_mode(ez, 0);
 
-        //printf("%i - %i\n", BeatmapArray[i], i);
+#ifdef DEBUG
+        printf(KMAG "\nBeatmapArray[i]: %i\ni: %i" KRESET "\n", BeatmapArray[i], i);
+#endif
         sprintf(BeatmapID, "%d", BeatmapArray[i]);
 
         strcat(MapPath, __BeatmapPath);
@@ -153,7 +144,9 @@ int main(int argc, char** argv) {
         strcat(MapPath, ".osu");
 
         if (!GetFileSize(MapPath)) {
-            //printf(KRED "Failed %s" KRESET "\n", BeatmapID);
+#ifdef DEBUG
+            printf(KRED "\nFailed %s" KRESET "\n", BeatmapID);
+#endif
             strcpy(MapPath, "");
             continue;
         }
@@ -164,9 +157,16 @@ int main(int argc, char** argv) {
         PP = ezpp_pp(ez);
         MapStars = ezpp_stars(ez);
 
-        //printf("%f\n", PP);
+#ifdef DEBUG
+        printf("%f\n", PP);
+#endif
 
-        if (!PP || PP < 750.f || PP > 4000.f || isnan(PP)) continue;//ignore stupid numbers
+        if (!PP || PP < 1500.f || PP > 4000.f || is_nan(PP)) { // TODO: change to is_nan from oppai.h
+#ifdef DEBUG
+            printf(KRED "\nBAD Failed %s (%.2fpp)" KRESET "\n", BeatmapID, PP);
+#endif
+            continue;
+        }
 
         //TODO: sql prepare statement?
         char SQLInsert[120];
@@ -181,15 +181,21 @@ int main(int argc, char** argv) {
 
         strcat(SQLInsert, ", ");
         static char _SR[8];
-        gcvt(MapStars, 7, _SR);
+        gcvt(MapStars, 8, _SR);
         _SR[7] = '\0';
+
         strcat(SQLInsert, _SR);
 
         strcat(SQLInsert, ");");
-        _SQL(_conn, SQLInsert);
+        if (!_SQL(conn, SQLInsert))
+            return 0;
 
-        printf("Inserting accepted value: %fpp - %spp (%s*)\n", PP, _PP, _SR);
+        printf(KGRN "\nInserting accepted value" KRESET "\nBeatmap ID: %s\nPP: %spp (%fpp)\nStar Rating: %s*\n", BeatmapID, _PP, PP, _SR);
+
+        // TODO: find out how to actually do this?
         strcpy(SQLInsert, "");
+        strcpy(_SR, "");
+        strcpy(_PP, "");
 
         PP = 0.f;
         MapStars = 0.f;
@@ -199,6 +205,5 @@ int main(int argc, char** argv) {
 
     mysql_free_result(res);
     mysql_close(conn);
-    mysql_close(_conn);
-    return 0;
+    return 1;
 }
