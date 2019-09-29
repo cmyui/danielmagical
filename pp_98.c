@@ -9,9 +9,7 @@
 
 #define DEBUG 0
 
-#if DEBUG
-    #define LogError(x) printf(KRED "ERROR CODE "#x KRESET "\n")
-#endif
+#define LogError(x) printf(KRED "ERROR CODE "#x KRESET "\n")
 
 #define KNRM  "\x1B[0m"
 #define KRED  "\x1B[31m"
@@ -33,7 +31,7 @@
 #define ACCURACY 98.f
 #define MAX_PP 4000.f
 #define MIN_PP 1500.f
-#define SQLInsert_Max_Len 111
+#define SQLInsert_Max_Len 112
 
 enum Mods
 {
@@ -122,8 +120,8 @@ int main(void) {
 
     mysql_free_result(res);
 
-    char BeatmapID[12];
-    char MapPath[strlen(__BeatmapPath) + 11];
+    char BeatmapID[8];
+    char MapPath[strlen(__BeatmapPath) + 11];// TODO: const size
     float PP, MapStars;
 
     for (int i = 0; i <= row_count; i++) {
@@ -134,15 +132,16 @@ int main(void) {
         }
 
         ezpp_set_mods(ez, Relax + HardRock + Hidden + DoubleTime);
-        //ezpp_set_nmiss(ez, 0);
+        ezpp_set_nmiss(ez, 0);
         ezpp_set_accuracy_percent(ez, ACCURACY);
         //ezpp_set_combo(ez, sData.MaxCombo);
-        //ezpp_set_mode(ez, 0);
+        ezpp_set_mode(ez, 0);
 
 #if DEBUG
         printf(KMAG "\nBeatmapArray[i]: %i\ni: %i" KRESET "\n", BeatmapArray[i], i);
 #endif
         sprintf(BeatmapID, "%d", BeatmapArray[i]);
+        BeatmapID[7] = NULL_TERM;
 
         strcat(MapPath, __BeatmapPath);
         strcat(MapPath, BeatmapID);
@@ -160,52 +159,77 @@ int main(void) {
         ezpp(ez, MapPath);
         strcpy(MapPath, "\0");
 
-        float pp_split[2/*3*/] = {0, 0/*, 0*/};
-        pp_split[0] = ezpp_aim_pp(ez);
-        pp_split[1] = ezpp_speed_pp(ez);
-        //pp[2] = ezpp_acc_pp(ez);
-
+        /* ez->pp and ez->stars?
         PP = ezpp_pp(ez);
-
         MapStars = ezpp_stars(ez);
+        */
 
 #if DEBUG
-        printf("PP: %.2f\n", PP);
+        printf("PP: %.2f\n", ez->pp);
 #endif
 
-        if (PP < MIN_PP || PP > MAX_PP || is_nan(PP)) { // oppai occasionally returns a nan value.. very cool kanye
+        if (ez->pp < MIN_PP || ez->pp > MAX_PP || is_nan(ez->pp)) { // oppai occasionally returns a nan value.. very cool kanye
 #if DEBUG
-            printf(KRED "\nBAD Failed %s (%.2fpp)" KRESET "\n", BeatmapID, PP);
+            printf(KRED "\nBAD Failed %s (%.2fpp)" KRESET "\n", BeatmapID, ez->pp);
 #endif
             continue;
         }
 
         //TODO: sql prepare statement?
         char SQLInsert[SQLInsert_Max_Len] = { '\0' };
-        strcat(SQLInsert, "INSERT IGNORE INTO daniel_maps(id,beatmap_id,pp,star_rating,stream_map)VALUES(NULL,");
+        strcat(SQLInsert, "INSERT IGNORE INTO daniel_maps(id,beatmap_id,pp,star_rating,pp_ratio)VALUES(NULL,");
 
         strcat(SQLInsert, BeatmapID);
         strcat(SQLInsert, ",");
 
-        static char _PP[8], _SR[8];
+        static char
+            _PP[8] = { '\0' },
+            _SR[8] = { '\0' }
+        ;
 
         // PP
-        gcvt(PP, 7, _PP);
+        gcvt(ez->pp, 7, _PP);
         _PP[7] = NULL_TERM;
         strcat(SQLInsert, _PP);
         strcat(SQLInsert, ",");
 
         // SR
-        gcvt(MapStars, 8, _SR);
+        gcvt(ez->stars, 8, _SR);
         _SR[7] = NULL_TERM;
         strcat(SQLInsert, _SR);
+        strcat(SQLInsert, ",");
 
-        // is the map's stream pp 1.5x it's aim pp?
-        strcat(SQLInsert, (pp_split[1] / 2) > pp_split[0] ? ",1);\0" : ",0);\0");
+        char pp_ratio[5];
+        gcvt((int)((ez->speed_pp / ez->pp) * 100), 4, pp_ratio);
+        pp_ratio[4] = NULL_TERM;
+        strcat(SQLInsert, pp_ratio);
+        strcat(SQLInsert, ");");
 
         if (!_Query(conn, SQLInsert)) return 0;
 
-        printf(KGRN "\nInserting accepted value" KRESET "\nBeatmap ID: %s\nPP: %spp (%fpp)\nStar Rating: %s*\n", BeatmapID, _PP, PP, _SR);
+        printf(
+            KGRN "\n"
+            "Inserting accepted value" KRESET "\n"
+            "Beatmap ID: %s\n"
+            "PP: %spp (%fpp)\n"
+            "Star Rating: %s*\n"
+            "Stream pp: %s%%\n",
+            BeatmapID,
+            _PP,
+            ez->pp,
+            _SR,
+            pp_ratio
+        );
+
+#if DEBUG
+        printf(
+            "SQLInsert:\n"
+            "len: %zu\n"
+            "str: \"%s\"\n",
+            strlen(SQLInsert),
+            SQLInsert
+        );
+#endif
 
         if (strlen(SQLInsert) > SQLInsert_Max_Len)
         {
@@ -223,18 +247,19 @@ int main(void) {
         }
 
         // TODO: find out how to actually do this?
-        strcpy(SQLInsert, "\0");
-        strcpy(_SR, "\0");
-        strcpy(_PP, "\0");
+        //strcpy(SQLInsert, "\0");
+        //strcpy(_SR, "\0");
+        //strcpy(_PP, "\0");
 
-        PP = 0.f;
-        MapStars = 0.f;
+        //PP = 0.f;
+        //MapStars = 0.f;
 
         ezpp_free(ez);
     }
 
     mysql_free_result(res);
     mysql_close(conn);
-    printf(KGRN "Closed successfully." KRESET "\n");
+
+    printf("\n" KGRN "Closed successfully." KRESET "\n");
     return 1;
 }
