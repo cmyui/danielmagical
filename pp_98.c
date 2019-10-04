@@ -19,16 +19,10 @@
 #define KRESET "\033[0m"
 #define NULL_TERM '\0'
 
-#define LogError(x) printf(KRED "ERROR CODE "#x KRESET "\n")
+#define LogError(x) printf(KRED "ERR: " KRESET #x "\n")
 
 // TODO: config
 #define DEBUG 0
-
-// SQL
-#define SQL_SERVER "localhost"
-#define SQL_USER "root"
-#define SQL_PASSWD "no"
-#define SQL_DB "ripple"
 
 // Path to beatmaps folder
 #define __BeatmapPath "/mnt/d/Development/Misc Tools/gen_table/maps/"
@@ -97,6 +91,30 @@ unsigned char FileExists(const char* BeatmapPath)
 
 int main(int argc, char *argv[])
 {
+    char sql_user[32], sql_pass[32], sql_db[32], sql_server[32];
+    { // Config
+        const char delim[2] = ":";
+        FILE* file = fopen("config.ini", "r");
+
+        char line[64];
+
+        while (fgets(line, sizeof(line), file))
+        {
+            // trim newline off end
+            size_t len = strlen(line);
+            if (len > 0 && line[len-1] == '\n')
+                line[--len] = '\0';
+
+            char *key = strtok(line, delim), *val;
+
+            if      (!strcmp("sql_user",   key)) strncpy(sql_user,   strtok(NULL, delim), sizeof(sql_user));
+            else if (!strcmp("sql_pass",   key)) strncpy(sql_pass,   strtok(NULL, delim), sizeof(sql_pass));
+            else if (!strcmp("sql_db",     key)) strncpy(sql_db,     strtok(NULL, delim), sizeof(sql_db));
+            else if (!strcmp("sql_server", key)) strncpy(sql_server, strtok(NULL, delim), sizeof(sql_server));
+            else printf("Unknown config key '%s'\n", key);
+        }
+    }
+
     // Default mods
     int mods = Relax | HardRock | Hidden | DoubleTime;
     float accuracy = 100.f;
@@ -118,15 +136,15 @@ int main(int argc, char *argv[])
     MYSQL_ROW row;
     conn = mysql_init(NULL);
 
-    if (!mysql_real_connect(conn, SQL_SERVER, SQL_USER, SQL_PASSWD, SQL_DB, 0, NULL, 0))
+    if (!mysql_real_connect(conn, sql_server, sql_user, sql_pass, sql_db, 0, NULL, 0))
     {
-        fprintf(stderr, KRED "%s" KRESET "\n", mysql_error(conn));
+        LogError(mysql_error(conn));
         return 0;
     }
 
     if (mysql_query(conn, "SELECT beatmap_id FROM beatmaps WHERE ranked IN (-2, 2) ORDER BY beatmap_id ASC"))
     {
-        fprintf(stderr, KRED "%s" KRESET "\n", mysql_error(conn));
+        LogError(mysql_error(conn));
         return 0;
     }
 
@@ -148,7 +166,7 @@ int main(int argc, char *argv[])
 
         if (!ez)
         {
-            printf("\n" KRED "** Failed to load ezpp. **" KRESET "\n");
+            LogError("Failed to load ezpp.");
             return 0;
         }
 
@@ -164,7 +182,10 @@ int main(int argc, char *argv[])
         snprintf(MapPath, path_max_size, "/mnt/d/Development/Misc Tools/gen_table/maps/%i.osu", BeatmapArray[i]);
 
         if (!FileExists(MapPath))
+        {
+            ezpp_free(ez);
             continue;
+        }
 
         // Init oppai's ezpp with the map's path.
         ezpp(ez, MapPath);
@@ -174,7 +195,10 @@ int main(int argc, char *argv[])
 #endif
 
         if (ez->pp < MIN_PP || ez->pp > MAX_PP || is_nan(ez->pp))
+        {
+            ezpp_free(ez);
             continue;
+        }
 
         { // Accepted val
             int pp_ratio = (int)((ez->speed_pp / (ez->aim_pp + ez->speed_pp + ez->acc_pp)) * 100); // In Akatsuki pp, ez->speed_pp isnt part of ez->pp.
@@ -191,7 +215,7 @@ int main(int argc, char *argv[])
 
             if (mysql_query(conn, SQL))
             {
-                fprintf(stderr, KRED "%s" KRESET "\n", mysql_error(conn));
+                LogError(mysql_error(conn));
                 return 0;
             }
 
