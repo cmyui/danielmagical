@@ -1,9 +1,7 @@
 // A Simple (and pretty beginner-level coded) map/pp finder made by cmyui as (basically) his first project in C.
-//#define _CRT_SECURE_NO_WARNINGS
 #include <stdio.h>
 #include <mysql/mysql.h>
 #include <stdlib.h>
-//#include <string.h>
 
 #include </mnt/d/Development/Misc Tools/gen_table/oppai.h>
 
@@ -38,41 +36,41 @@ char SQL[sizeof("INSERT IGNORE INTO pp_table(id,beatmap_id,pp,star_rating,pp_rat
 
 enum Mods
 {
-	noMod = 0,
-	NoFail = 1 << 0,
-	Easy = 1 << 1,
-	//NoVideo              = 1 << 2,
-	Hidden = 1 << 3,
-	HardRock = 1 << 4,
-	SuddenDeath = 1 << 5,
-	DoubleTime = 1 << 6,
-	Relax = 1 << 7,
-	HalfTime = 1 << 8,
-	Nightcore = 1 << 9,
-	Flashlight = 1 << 10,
-	Autoplay = 1 << 11,
-	SpunOut = 1 << 12,
-	Relax2 = 1 << 13,
-	Perfect = 1 << 14,
-	Key4 = 1 << 15,
-	Key5 = 1 << 16,
-	Key6 = 1 << 17,
-	Key7 = 1 << 18,
-	Key8 = 1 << 19,
-	FadeIn = 1 << 20,
-	Random = 1 << 21,
-	Cinema = 1 << 22,
-	Target = 1 << 23,
-	Key9 = 1 << 24,
-	KeyCoop = 1 << 25,
-	Key1 = 1 << 26,
-	Key3 = 1 << 27,
-	Key2 = 1 << 28,
-	LastMod = 1 << 29,
-	KeyMod = Key1 | Key2 | Key3 | Key4 | Key5 | Key6 | Key7 | Key8 | Key9 | KeyCoop,
-	FreeModAllowed = NoFail | Easy | Hidden | HardRock | SuddenDeath | Flashlight | FadeIn | Relax | Relax2 | SpunOut | KeyMod,
-	ScoreIncreaseMods = Hidden | HardRock | DoubleTime | Flashlight | FadeIn,
-	TimeAltering = DoubleTime | HalfTime | Nightcore
+  //noMod             = 0,
+	NoFail            = 1 << 0,
+	Easy              = 1 << 1,
+  //NoVideo           = 1 << 2,
+	Hidden            = 1 << 3,
+	HardRock          = 1 << 4,
+  //SuddenDeath       = 1 << 5,
+	DoubleTime        = 1 << 6,
+	Relax             = 1 << 7,
+	HalfTime          = 1 << 8,
+	Nightcore         = 1 << 9,
+	Flashlight        = 1 << 10,
+  //Autoplay          = 1 << 11,
+	SpunOut           = 1 << 12,
+  //Relax2            = 1 << 13,
+  //Perfect           = 1 << 14,
+  //Key4              = 1 << 15,
+  //Key5              = 1 << 16,
+  //Key6              = 1 << 17,
+  //Key7              = 1 << 18,
+  //Key8              = 1 << 19,
+  //FadeIn            = 1 << 20,
+  //Random            = 1 << 21,
+  //Cinema            = 1 << 22,
+  //Target            = 1 << 23,
+  //Key9              = 1 << 24,
+  //KeyCoop           = 1 << 25,
+  //Key1              = 1 << 26,
+  //Key3              = 1 << 27,
+  //Key2              = 1 << 28,
+  //LastMod           = 1 << 29,
+  //KeyMod            = Key1 | Key2 | Key3 | Key4 | Key5 | Key6 | Key7 | Key8 | Key9 | KeyCoop,
+  //FreeModAllowed    = NoFail | Easy | Hidden | HardRock | SuddenDeath | Flashlight | FadeIn | Relax | Relax2 | SpunOut | KeyMod,
+  //ScoreIncreaseMods = Hidden | HardRock | DoubleTime | Flashlight | FadeIn,
+  //TimeAltering      = DoubleTime | HalfTime | Nightcore
 };
 
 unsigned char FileExists(const char* BeatmapPath)
@@ -105,28 +103,77 @@ int main(int argc, char *argv[])
             if (len > 0 && line[len-1] == '\n')
                 line[--len] = '\0';
 
-            char *key = strtok(line, delim), *val;
+            char *key = strtok(line, delim);
 
             if      (!strcmp("sql_user",   key)) strncpy(sql_user,   strtok(NULL, delim), sizeof(sql_user));
             else if (!strcmp("sql_pass",   key)) strncpy(sql_pass,   strtok(NULL, delim), sizeof(sql_pass));
             else if (!strcmp("sql_db",     key)) strncpy(sql_db,     strtok(NULL, delim), sizeof(sql_db));
             else if (!strcmp("sql_server", key)) strncpy(sql_server, strtok(NULL, delim), sizeof(sql_server));
-            else printf("Unknown config key '%s'\n", key);
+            else printf(KYEL "Unknown config key '%32s'" KRESET "\n", key);
         }
     }
 
-    // Default mods
+    // Default settings.
     int mods = Relax | HardRock | Hidden | DoubleTime;
     float accuracy = 100.f;
+    unsigned char wipe_db = 0;
 
-    // TODO: actually properly do these lol.
-    // Also, I can add quite a bit of cool flag things here!
-    if (argc > 1) mods     = atoi(argv[1]);
-    if (argc > 2) accuracy = atof(argv[2]);
-    if (!mods || mods > 1073741824 || !accuracy || accuracy > 100.f)
-    {
-        printf("\n" KRED "Invalid custom settings (%i, %.2f%%)\n" KRESET "\n", mods, accuracy);
-        return 0;
+    { // Launch flags.
+        unsigned char inc = 0;
+        for (int i = 0; i < argc; i++)
+        {
+            if (inc)
+            {
+                inc = 0;
+                continue;
+            }
+
+            if (i  > argc - 2)
+            {
+                LogError("Invalid launch flags.");
+                break;
+            }
+
+            if (!strcmp("--mods", argv[i]))
+            {
+                mods = 0;
+                char *_mods = argv[i + 1];
+                int Size = strlen(_mods);
+
+                char current_mod[3];
+                for (int i = 0; i < Size; i++, i++)
+                {
+                    sscanf(_mods, "%2s", current_mod);
+
+                    if (strlen(current_mod) != 2)
+                        break;
+
+                    if      (!strcmp("nf", current_mod)) mods |= NoFail;
+                    else if (!strcmp("ez", current_mod)) mods |= Easy;
+                    else if (!strcmp("hd", current_mod)) mods |= Hidden;
+                    else if (!strcmp("hr", current_mod)) mods |= HardRock;
+                    else if (!strcmp("dt", current_mod)) mods |= DoubleTime;
+                    else if (!strcmp("rx", current_mod)) mods |= Relax;
+                    else if (!strcmp("ht", current_mod)) mods |= HalfTime;
+                    else if (!strcmp("nc", current_mod)) mods |= Nightcore;
+                    else if (!strcmp("fl", current_mod)) mods |= Flashlight;
+                    else if (!strcmp("so", current_mod)) mods |= SpunOut;
+                    else printf(KYEL "Invalid mod '%s'" KRESET "\n", current_mod);
+
+                    _mods += 2;
+                }
+
+                inc = 1;
+            }
+            else if (!strcmp("--acc", argv[i])) // Get custom accuracy value.
+            {
+                sscanf(argv[i + 1], "%f", &accuracy);
+                //accuracy = atof(argv[i + 1]);
+                inc = 1;
+            }
+            else if (!strcmp("--wipe-db", argv[i])) // Wipe the database for gen_table.
+                wipe_db = 1;
+        }
     }
 
     printf(KYEL "Settings:\n" KCYN "Mods: %i\nAccuracy: %.2f" KRESET "\n\n", mods, accuracy);
@@ -142,7 +189,17 @@ int main(int argc, char *argv[])
         return 0;
     }
 
-    if (mysql_query(conn, "SELECT beatmap_id FROM beatmaps WHERE ranked IN (-2, 2) ORDER BY beatmap_id ASC"))
+    if (wipe_db)
+    {
+        if (mysql_query(conn, "TRUNCATE TABLE pp_table;"))
+        {
+            LogError(mysql_error(conn));
+            return 0;
+        }
+        printf(KGRN "Wiped database." KRESET "\n");
+    }
+
+    if (mysql_query(conn, "SELECT beatmap_id FROM beatmaps WHERE ranked IN (-2, 2) ORDER BY beatmap_id ASC;"))
     {
         LogError(mysql_error(conn));
         return 0;
@@ -179,7 +236,7 @@ int main(int argc, char *argv[])
         ezpp_set_combo            (ez, 0);
         */
 
-        snprintf(MapPath, path_max_size, "/mnt/d/Development/Misc Tools/gen_table/maps/%i.osu", BeatmapArray[i]);
+        snprintf(MapPath, path_max_size, "/mnt/d/Development/Misc Tools/gen_table/maps/%7i.osu", BeatmapArray[i]);
 
         if (!FileExists(MapPath))
         {
@@ -206,7 +263,7 @@ int main(int argc, char *argv[])
             snprintf(
                 SQL,
                 sql_max_size,
-                "INSERT IGNORE INTO pp_table(id,beatmap_id,pp,star_rating,pp_ratio)VALUES(NULL,%i,%.3f,%.5f,%i);",
+                "INSERT IGNORE INTO pp_table(id,beatmap_id,pp,star_rating,pp_ratio)VALUES(NULL,%7i,%.3f,%.5f,%3i);",
                 BeatmapArray[i],
                 ez->pp,
                 ez->stars,
