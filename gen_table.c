@@ -18,11 +18,10 @@
 
 #define LogError(x) printf(KRED "ERR: " KRESET #x "\n")
 
-char BEATMAP_FOLDER[17] = { '\0' }, // sizeof("maps/1234567.osu")
+char BEATMAP_FOLDER[17] = { '\0' },
      SQL[sizeof("INSERT IGNORE INTO pp_table(id,beatmap_id,pp,star_rating,pp_ratio)VALUES(NULL,1234567,1234.123,12.12345,123);")] = { '\0' };
 
-enum Mods
-{
+enum Mods {
   //noMod             = 0,
 	NoFail            = 1 << 0,
 	Easy              = 1 << 1,
@@ -60,9 +59,8 @@ enum Mods
   //TimeAltering      = DoubleTime | HalfTime | Nightcore
 };
 
-unsigned char FileExists(const char* BeatmapPath)
-{
-	FILE *f = fopen(BeatmapPath, "r");
+unsigned char FileExists(const char* BeatmapPath) {
+    FILE *f = fopen(BeatmapPath, "r");
     if (!f) return 1;
 
     fseek(f, 0, SEEK_END);
@@ -74,23 +72,21 @@ unsigned char FileExists(const char* BeatmapPath)
     return 0;
 }
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
     char sql_user[32], sql_pass[32], sql_db[32], sql_server[32];
     { // Config
         const char delim[2] = ":";
         FILE *f = fopen("config.ini", "r");
 
-        if (!f)
-        {
+        if (!f) {
             LogError(No config file could be found!);
             return 1;
         }
 
         char line[64];
 
-        while (fgets(line, sizeof(line), f))
-        {
+        while (fgets(line, sizeof(line), f)) {
+
             { // trim newline off end
                 size_t len = strlen(line);
                 if (len > 0 && line[len-1] == '\n')
@@ -99,10 +95,10 @@ int main(int argc, char *argv[])
 
             char *key = strtok(line, delim);
 
-            if      (!strcmp("sql_user",   key)) strncpy(sql_user,   strtok(NULL, delim), sizeof(sql_user));
-            else if (!strcmp("sql_pass",   key)) strncpy(sql_pass,   strtok(NULL, delim), sizeof(sql_pass));
-            else if (!strcmp("sql_db",     key)) strncpy(sql_db,     strtok(NULL, delim), sizeof(sql_db));
-            else if (!strcmp("sql_server", key)) strncpy(sql_server, strtok(NULL, delim), sizeof(sql_server));
+            if      (!strncmp("sql_user",   key, 32UL)) strncpy(sql_user,   strtok(NULL, delim), sizeof(sql_user));
+            else if (!strncmp("sql_pass",   key, 32UL)) strncpy(sql_pass,   strtok(NULL, delim), sizeof(sql_pass));
+            else if (!strncmp("sql_db",     key, 32UL)) strncpy(sql_db,     strtok(NULL, delim), sizeof(sql_db));
+            else if (!strncmp("sql_server", key, 32UL)) strncpy(sql_server, strtok(NULL, delim), sizeof(sql_server));
             else printf(KYEL "Unknown config key '%32s'" KRESET "\n", key);
         } fclose(f);
     }
@@ -116,96 +112,84 @@ int main(int argc, char *argv[])
 
     { // Launch flags.
         unsigned char ignore = 0;
-        for (int i = 0; i < argc; i++)
-        {
-            if (ignore)
-            {
+        for (int i = 0; i < argc; i++) {
+            if (ignore) {
                 ignore = 0;
                 continue;
             }
 
-            if (i  > argc - 2)
-            {
+            if (i  > argc - 2) {
                 LogError(Invalid launch flags.);
                 break;
             }
 
             // Specify specific mod(s).
-            if (!strcmp("--mods", argv[i]))
-            {
+            if (!strncmp("--mods", argv[i], 6)) {
                 mods = 0;
                 char *mods_ascii = argv[i + 1];
                 const int Size = strlen(mods_ascii);
 
                 char mod[3];
-                for (int i = 0; i < Size; i++, i++)
-                {
+
+                for (int i = 0; i < Size; i++, i++) {
                     sscanf(mods_ascii, "%2s", mod);
 
                     if (strlen(mod) != 2)
                         break;
 
-                    if      (!strcmp("nf", mod)) mods |= NoFail;
-                    else if (!strcmp("ez", mod)) mods |= Easy;
-                    else if (!strcmp("hd", mod)) mods |= Hidden;
-                    else if (!strcmp("hr", mod)) mods |= HardRock;
-                    else if (!strcmp("dt", mod)) mods |= DoubleTime;
-                    else if (!strcmp("rx", mod)) mods |= Relax;
-                    else if (!strcmp("ht", mod)) mods |= HalfTime;
-                    else if (!strcmp("nc", mod)) mods |= Nightcore;
-                    else if (!strcmp("fl", mod)) mods |= Flashlight;
-                    else if (!strcmp("so", mod)) mods |= SpunOut;
+                    if      (!strncmp("nf", mod, 2)) mods |= NoFail;
+                    else if (!strncmp("ez", mod, 2)) mods |= Easy;
+                    else if (!strncmp("hd", mod, 2)) mods |= Hidden;
+                    else if (!strncmp("hr", mod, 2)) mods |= HardRock;
+                    else if (!strncmp("dt", mod, 2)) mods |= DoubleTime;
+                    else if (!strncmp("rx", mod, 2)) mods |= Relax;
+                    else if (!strncmp("ht", mod, 2)) mods |= HalfTime;
+                    else if (!strncmp("nc", mod, 2)) mods |= Nightcore;
+                    else if (!strncmp("fl", mod, 2)) mods |= Flashlight;
+                    else if (!strncmp("so", mod, 2)) mods |= SpunOut;
                     else printf(KYEL "Invalid mod '%s'" KRESET "\n", mod);
 
                     mods_ascii += 2;
                 }
-
                 ignore = 1;
             }
 
             // Specify specific accuracy.
-            else if (!strcmp("--acc", argv[i]))
-            {
+            else if (!strncmp("--acc", argv[i], 5)) {
                 sscanf(argv[i + 1], "%f", &accuracy);
                 ignore = 1;
             }
 
             // Specify to wipe DB.
-            else if (!strcmp("--wipe-db", argv[i]))
-            {
+            else if (!strncmp("--wipe-db", argv[i], 9)) {
                 wipe_db = 1;
             }
 
             // Specify specific max-pp.
-            else if (!strcmp("--max-pp", argv[i]))
-            {
+            else if (!strncmp("--max-pp", argv[i], 8)) {
                 sscanf(argv[i + 1], "%f", &MAX_PP);
                 ignore = 1;
             }
 
             // Specify specific min-pp.
-            else if (!strcmp("--min-pp", argv[i]))
-            {
+            else if (!strncmp("--min-pp", argv[i], 8)) {
                 sscanf(argv[i + 1], "%f", &MIN_PP);
                 ignore = 1;
             }
         }
     }
 
-    if (MAX_PP < 0.f || MIN_PP < 0.f)
-    {
+    if (MAX_PP < 0.f || MIN_PP < 0.f) {
         LogError(MAX_PP and MIN_PP must be greater than 0!);
         return 1;
     }
 
-    if (MAX_PP < MIN_PP)
-    {
+    if (MAX_PP < MIN_PP) {
         LogError(MAX_PP Must be greater than MIN_PP!);
         return 1;
     }
 
-    if (accuracy > 100.f || accuracy < 0.f)
-    {
+    if (accuracy > 100.f || accuracy < 0.f) {
         LogError(Accuracy must be between 0 - 100!);
         return 1;
     }
@@ -217,24 +201,20 @@ int main(int argc, char *argv[])
     MYSQL_ROW row;
     conn = mysql_init(NULL);
 
-    if (!mysql_real_connect(conn, sql_server, sql_user, sql_pass, sql_db, 0, NULL, 0))
-    {
+    if (!mysql_real_connect(conn, sql_server, sql_user, sql_pass, sql_db, 0, NULL, 0)) {
         LogError(mysql_error(conn));
         return 1;
     }
 
-    if (wipe_db)
-    {
-        if (mysql_query(conn, "TRUNCATE TABLE pp_table;"))
-        {
+    if (wipe_db) {
+        if (mysql_query(conn, "TRUNCATE TABLE pp_table;")) {
             LogError(mysql_error(conn));
             return 1;
         }
         printf(KGRN "Wiped database." KRESET "\n");
     }
 
-    if (mysql_query(conn, "SELECT beatmap_id FROM beatmaps WHERE ranked IN (-2, 2) ORDER BY beatmap_id ASC;"))
-    {
+    if (mysql_query(conn, "SELECT beatmap_id FROM beatmaps WHERE ranked IN (-2, 2) ORDER BY beatmap_id ASC;")) {
         LogError(mysql_error(conn));
         return 1;
     }
@@ -251,12 +231,10 @@ int main(int argc, char *argv[])
 
     mysql_free_result(res);
 
-    for (int i = 0; i <= row_count; i++)
-        {
+    for (int i = 0; i <= row_count; i++) {
         ezpp_t ez = ezpp_new();
 
-        if (!ez)
-        {
+        if (!ez) {
             LogError(Failed to load ezpp.);
             return 1;
         }
@@ -272,8 +250,7 @@ int main(int argc, char *argv[])
 
         snprintf(BEATMAP_FOLDER, sizeof(BEATMAP_FOLDER), "maps/%7i.osu", BeatmapArray[i]);
 
-        if (FileExists(BEATMAP_FOLDER))
-        {
+        if (FileExists(BEATMAP_FOLDER)) {
             ezpp_free(ez);
             continue;
         }
@@ -281,8 +258,7 @@ int main(int argc, char *argv[])
         // Init oppai's ezpp with the map's path.
         ezpp(ez, BEATMAP_FOLDER);
 
-        if (ez->pp < MIN_PP || ez->pp > MAX_PP || is_nan(ez->pp))
-        {
+        if (ez->pp < MIN_PP || ez->pp > MAX_PP || is_nan(ez->pp)) {
             ezpp_free(ez);
             continue;
         }
@@ -300,8 +276,7 @@ int main(int argc, char *argv[])
                 pp_ratio
             );
 
-            if (mysql_query(conn, SQL))
-            {
+            if (mysql_query(conn, SQL)) {
                 LogError(mysql_error(conn));
                 return 1;
             }
