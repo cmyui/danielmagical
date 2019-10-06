@@ -15,11 +15,10 @@
 #define KCYN      "\x1B[36m"
 #define KGRY      "\x1B[37m"
 #define KRESET    "\033[0m"
-#define NULL_TERM '\0'
 
 #define LogError(x) printf(KRED "ERR: " KRESET #x "\n")
 
-char BEATMAP_FOLDER[sizeof("/mnt/d/Development/Misc Tools/gen_table/maps/1234567.osu")] = { '\0' },
+char BEATMAP_FOLDER[17] = { '\0' }, // sizeof("maps/1234567.osu")
      SQL[sizeof("INSERT IGNORE INTO pp_table(id,beatmap_id,pp,star_rating,pp_ratio)VALUES(NULL,1234567,1234.123,12.12345,123);")] = { '\0' };
 
 enum Mods
@@ -116,12 +115,12 @@ int main(int argc, char *argv[])
                  accuracy = 100.f;
 
     { // Launch flags.
-        unsigned char inc = 0;
+        unsigned char ignore = 0;
         for (int i = 0; i < argc; i++)
         {
-            if (inc)
+            if (ignore)
             {
-                inc = 0;
+                ignore = 0;
                 continue;
             }
 
@@ -138,37 +137,37 @@ int main(int argc, char *argv[])
                 char *mods_ascii = argv[i + 1];
                 const int Size = strlen(mods_ascii);
 
-                char current_mod[3];
+                char mod[3];
                 for (int i = 0; i < Size; i++, i++)
                 {
-                    sscanf(mods_ascii, "%2s", current_mod);
+                    sscanf(mods_ascii, "%2s", mod);
 
-                    if (strlen(current_mod) != 2)
+                    if (strlen(mod) != 2)
                         break;
 
-                    if      (!strcmp("nf", current_mod)) mods |= NoFail;
-                    else if (!strcmp("ez", current_mod)) mods |= Easy;
-                    else if (!strcmp("hd", current_mod)) mods |= Hidden;
-                    else if (!strcmp("hr", current_mod)) mods |= HardRock;
-                    else if (!strcmp("dt", current_mod)) mods |= DoubleTime;
-                    else if (!strcmp("rx", current_mod)) mods |= Relax;
-                    else if (!strcmp("ht", current_mod)) mods |= HalfTime;
-                    else if (!strcmp("nc", current_mod)) mods |= Nightcore;
-                    else if (!strcmp("fl", current_mod)) mods |= Flashlight;
-                    else if (!strcmp("so", current_mod)) mods |= SpunOut;
-                    else printf(KYEL "Invalid mod '%s'" KRESET "\n", current_mod);
+                    if      (!strcmp("nf", mod)) mods |= NoFail;
+                    else if (!strcmp("ez", mod)) mods |= Easy;
+                    else if (!strcmp("hd", mod)) mods |= Hidden;
+                    else if (!strcmp("hr", mod)) mods |= HardRock;
+                    else if (!strcmp("dt", mod)) mods |= DoubleTime;
+                    else if (!strcmp("rx", mod)) mods |= Relax;
+                    else if (!strcmp("ht", mod)) mods |= HalfTime;
+                    else if (!strcmp("nc", mod)) mods |= Nightcore;
+                    else if (!strcmp("fl", mod)) mods |= Flashlight;
+                    else if (!strcmp("so", mod)) mods |= SpunOut;
+                    else printf(KYEL "Invalid mod '%s'" KRESET "\n", mod);
 
                     mods_ascii += 2;
                 }
 
-                inc = 1;
+                ignore = 1;
             }
 
             // Specify specific accuracy.
             else if (!strcmp("--acc", argv[i]))
             {
                 sscanf(argv[i + 1], "%f", &accuracy);
-                inc = 1;
+                ignore = 1;
             }
 
             // Specify to wipe DB.
@@ -181,21 +180,33 @@ int main(int argc, char *argv[])
             else if (!strcmp("--max-pp", argv[i]))
             {
                 sscanf(argv[i + 1], "%f", &MAX_PP);
-                inc = 1;
+                ignore = 1;
             }
 
             // Specify specific min-pp.
             else if (!strcmp("--min-pp", argv[i]))
             {
                 sscanf(argv[i + 1], "%f", &MIN_PP);
-                inc = 1;
+                ignore = 1;
             }
         }
     }
 
+    if (MAX_PP < 0.f || MIN_PP < 0.f)
+    {
+        LogError(MAX_PP and MIN_PP must be greater than 0!);
+        return 1;
+    }
+
     if (MAX_PP < MIN_PP)
     {
-        LogError(Max PP must be higher than Min PP!);
+        LogError(MAX_PP Must be greater than MIN_PP!);
+        return 1;
+    }
+
+    if (accuracy > 100.f || accuracy < 0.f)
+    {
+        LogError(Accuracy must be between 0 - 100!);
         return 1;
     }
 
@@ -259,7 +270,7 @@ int main(int argc, char *argv[])
         ezpp_set_combo            (ez, 0);
         */
 
-        snprintf(BEATMAP_FOLDER, sizeof(BEATMAP_FOLDER), "/mnt/d/Development/Misc Tools/gen_table/maps/%7i.osu", BeatmapArray[i]);
+        snprintf(BEATMAP_FOLDER, sizeof(BEATMAP_FOLDER), "maps/%7i.osu", BeatmapArray[i]);
 
         if (FileExists(BEATMAP_FOLDER))
         {
@@ -282,7 +293,7 @@ int main(int argc, char *argv[])
             snprintf(
                 SQL,
                 sizeof(SQL),
-                "INSERT IGNORE INTO pp_table(id,beatmap_id,pp,star_rating,pp_ratio)VALUES(NULL,%7i,%.3f,%.5f,%3i);",
+                "INSERT IGNORE INTO pp_table(id,beatmap_id,pp,star_rating,pp_ratio)VALUES(NULL,%7i,%8.3f,%8.5f,%3i);",
                 BeatmapArray[i],
                 ez->pp,
                 ez->stars,
