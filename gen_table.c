@@ -6,33 +6,21 @@
 #include </mnt/d/Development/Misc Tools/gen_table/oppai.h>
 
 // Console colours
-#define KNRM  "\x1B[0m"
-#define KRED  "\x1B[31m"
-#define KGRN  "\x1B[32m"
-#define KYEL  "\x1B[33m"
-#define KBLU  "\x1B[34m"
-#define KMAG  "\x1B[35m"
-#define KCYN  "\x1B[36m"
-#define KGRY  "\x1B[37m"
-#define KRESET "\033[0m"
+#define KNRM      "\x1B[0m"
+#define KRED      "\x1B[31m"
+#define KGRN      "\x1B[32m"
+#define KYEL      "\x1B[33m"
+#define KBLU      "\x1B[34m"
+#define KMAG      "\x1B[35m"
+#define KCYN      "\x1B[36m"
+#define KGRY      "\x1B[37m"
+#define KRESET    "\033[0m"
 #define NULL_TERM '\0'
 
 #define LogError(x) printf(KRED "ERR: " KRESET #x "\n")
 
-// TODO: config
-#define DEBUG 0
-
-// Path to beatmaps folder
-#define __BeatmapPath "/mnt/d/Development/Misc Tools/gen_table/maps/"
-
-const size_t path_max_size = sizeof(__BeatmapPath) + 11; // max size of beatmap path
-const size_t sql_max_size = sizeof("INSERT IGNORE INTO pp_table(id,beatmap_id,pp,star_rating,pp_ratio)VALUES(NULL,1234567,1234.123,12.12345,123);"); // max size of sql insert to pp_table
-char MapPath[sizeof(__BeatmapPath) + 11] = { '\0' };
-char SQL[sizeof("INSERT IGNORE INTO pp_table(id,beatmap_id,pp,star_rating,pp_ratio)VALUES(NULL,1234567,1234.123,12.12345,123);")] = { '\0' };
-
-// Settings
-#define MAX_PP 2750.f
-#define MIN_PP 1000.f
+char BEATMAP_FOLDER[sizeof("/mnt/d/Development/Misc Tools/gen_table/maps/1234567.osu")] = { '\0' },
+     SQL[sizeof("INSERT IGNORE INTO pp_table(id,beatmap_id,pp,star_rating,pp_ratio)VALUES(NULL,1234567,1234.123,12.12345,123);")] = { '\0' };
 
 enum Mods
 {
@@ -76,15 +64,15 @@ enum Mods
 unsigned char FileExists(const char* BeatmapPath)
 {
 	FILE *f = fopen(BeatmapPath, "r");
-    if (!f) return 0;
+    if (!f) return 1;
 
     fseek(f, 0, SEEK_END);
     const int Size = ftell(f);
 
     fclose(f);
 
-    if (Size < 100) return 0;
-    return 1;
+    if (Size < 100) return 1;
+    return 0;
 }
 
 int main(int argc, char *argv[])
@@ -92,16 +80,23 @@ int main(int argc, char *argv[])
     char sql_user[32], sql_pass[32], sql_db[32], sql_server[32];
     { // Config
         const char delim[2] = ":";
-        FILE* file = fopen("config.ini", "r");
+        FILE *f = fopen("config.ini", "r");
+
+        if (!f)
+        {
+            LogError(No config file could be found!);
+            return 1;
+        }
 
         char line[64];
 
-        while (fgets(line, sizeof(line), file))
+        while (fgets(line, sizeof(line), f))
         {
-            // trim newline off end
-            size_t len = strlen(line);
-            if (len > 0 && line[len-1] == '\n')
-                line[--len] = '\0';
+            { // trim newline off end
+                size_t len = strlen(line);
+                if (len > 0 && line[len-1] == '\n')
+                    line[--len] = '\0';
+            }
 
             char *key = strtok(line, delim);
 
@@ -110,13 +105,15 @@ int main(int argc, char *argv[])
             else if (!strcmp("sql_db",     key)) strncpy(sql_db,     strtok(NULL, delim), sizeof(sql_db));
             else if (!strcmp("sql_server", key)) strncpy(sql_server, strtok(NULL, delim), sizeof(sql_server));
             else printf(KYEL "Unknown config key '%32s'" KRESET "\n", key);
-        }
+        } fclose(f);
     }
 
     // Default settings.
-    int mods = Relax | HardRock | Hidden | DoubleTime;
-    float accuracy = 100.f;
+    int              mods = Relax | HardRock | Hidden | DoubleTime;
     unsigned char wipe_db = 0;
+    float          MAX_PP = 2750.f,
+                   MIN_PP = 1000.f,
+                 accuracy = 100.f;
 
     { // Launch flags.
         unsigned char inc = 0;
@@ -130,20 +127,21 @@ int main(int argc, char *argv[])
 
             if (i  > argc - 2)
             {
-                LogError("Invalid launch flags.");
+                LogError(Invalid launch flags.);
                 break;
             }
 
+            // Specify specific mod(s).
             if (!strcmp("--mods", argv[i]))
             {
                 mods = 0;
-                char *_mods = argv[i + 1];
-                int Size = strlen(_mods);
+                char *mods_ascii = argv[i + 1];
+                const int Size = strlen(mods_ascii);
 
                 char current_mod[3];
                 for (int i = 0; i < Size; i++, i++)
                 {
-                    sscanf(_mods, "%2s", current_mod);
+                    sscanf(mods_ascii, "%2s", current_mod);
 
                     if (strlen(current_mod) != 2)
                         break;
@@ -160,23 +158,48 @@ int main(int argc, char *argv[])
                     else if (!strcmp("so", current_mod)) mods |= SpunOut;
                     else printf(KYEL "Invalid mod '%s'" KRESET "\n", current_mod);
 
-                    _mods += 2;
+                    mods_ascii += 2;
                 }
 
                 inc = 1;
             }
-            else if (!strcmp("--acc", argv[i])) // Get custom accuracy value.
+
+            // Specify specific accuracy.
+            else if (!strcmp("--acc", argv[i]))
             {
                 sscanf(argv[i + 1], "%f", &accuracy);
-                //accuracy = atof(argv[i + 1]);
                 inc = 1;
             }
-            else if (!strcmp("--wipe-db", argv[i])) // Wipe the database for gen_table.
+
+            // Specify to wipe DB.
+            else if (!strcmp("--wipe-db", argv[i]))
+            {
                 wipe_db = 1;
+            }
+
+            // Specify specific max-pp.
+            else if (!strcmp("--max-pp", argv[i]))
+            {
+                sscanf(argv[i + 1], "%f", &MAX_PP);
+                inc = 1;
+            }
+
+            // Specify specific min-pp.
+            else if (!strcmp("--min-pp", argv[i]))
+            {
+                sscanf(argv[i + 1], "%f", &MIN_PP);
+                inc = 1;
+            }
         }
     }
 
-    printf(KYEL "Settings:\n" KCYN "Mods: %i\nAccuracy: %.2f" KRESET "\n\n", mods, accuracy);
+    if (MAX_PP < MIN_PP)
+    {
+        LogError(Max PP must be higher than Min PP!);
+        return 1;
+    }
+
+    printf(KYEL "Settings:\n" KCYN "Mods: %i\nAccuracy: %.2f\nMax PP: %.2f\nMin PP: %.2f" KRESET "\n\n", mods, accuracy, MAX_PP, MIN_PP);
 
     MYSQL *conn;
     MYSQL_RES *res;
@@ -186,7 +209,7 @@ int main(int argc, char *argv[])
     if (!mysql_real_connect(conn, sql_server, sql_user, sql_pass, sql_db, 0, NULL, 0))
     {
         LogError(mysql_error(conn));
-        return 0;
+        return 1;
     }
 
     if (wipe_db)
@@ -194,7 +217,7 @@ int main(int argc, char *argv[])
         if (mysql_query(conn, "TRUNCATE TABLE pp_table;"))
         {
             LogError(mysql_error(conn));
-            return 0;
+            return 1;
         }
         printf(KGRN "Wiped database." KRESET "\n");
     }
@@ -202,7 +225,7 @@ int main(int argc, char *argv[])
     if (mysql_query(conn, "SELECT beatmap_id FROM beatmaps WHERE ranked IN (-2, 2) ORDER BY beatmap_id ASC;"))
     {
         LogError(mysql_error(conn));
-        return 0;
+        return 1;
     }
 
     res = mysql_store_result(conn);
@@ -223,8 +246,8 @@ int main(int argc, char *argv[])
 
         if (!ez)
         {
-            LogError("Failed to load ezpp.");
-            return 0;
+            LogError(Failed to load ezpp.);
+            return 1;
         }
 
         // oppai settings.
@@ -236,20 +259,16 @@ int main(int argc, char *argv[])
         ezpp_set_combo            (ez, 0);
         */
 
-        snprintf(MapPath, path_max_size, "/mnt/d/Development/Misc Tools/gen_table/maps/%7i.osu", BeatmapArray[i]);
+        snprintf(BEATMAP_FOLDER, sizeof(BEATMAP_FOLDER), "/mnt/d/Development/Misc Tools/gen_table/maps/%7i.osu", BeatmapArray[i]);
 
-        if (!FileExists(MapPath))
+        if (FileExists(BEATMAP_FOLDER))
         {
             ezpp_free(ez);
             continue;
         }
 
         // Init oppai's ezpp with the map's path.
-        ezpp(ez, MapPath);
-
-#if DEBUG
-        printf("PP: %.3f\n", ez->pp);
-#endif
+        ezpp(ez, BEATMAP_FOLDER);
 
         if (ez->pp < MIN_PP || ez->pp > MAX_PP || is_nan(ez->pp))
         {
@@ -262,7 +281,7 @@ int main(int argc, char *argv[])
 
             snprintf(
                 SQL,
-                sql_max_size,
+                sizeof(SQL),
                 "INSERT IGNORE INTO pp_table(id,beatmap_id,pp,star_rating,pp_ratio)VALUES(NULL,%7i,%.3f,%.5f,%3i);",
                 BeatmapArray[i],
                 ez->pp,
@@ -273,7 +292,7 @@ int main(int argc, char *argv[])
             if (mysql_query(conn, SQL))
             {
                 LogError(mysql_error(conn));
-                return 0;
+                return 1;
             }
 
             printf(
@@ -297,5 +316,5 @@ int main(int argc, char *argv[])
     mysql_close(conn);
 
     printf("\n" KGRN "Closed successfully." KRESET "\n");
-    return 1;
+    return 0;
 }
