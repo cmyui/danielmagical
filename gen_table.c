@@ -117,22 +117,19 @@ int main(int argc, char *argv[]) {
     }
 
     // Default settings.
-    int              mods = noMod;
+    int           mods = noMod;
     unsigned char wipe_db = 0;
-    float          MAX_PP = 2750.f,
-                   MIN_PP = 1000.f,
-                 accuracy = 100.f;
+    float         MAX_PP = 2750.f,
+                  MIN_PP = 1000.f,
+                  accuracy = 100.f;
 
     { // Launch flags.
-        unsigned char ignore = 0;
+        unsigned char skip = 0;
         for (int i = 0; i < argc; i++) {
-            if (ignore) {
-                ignore--;
+            if (skip) {
+                skip--;
                 continue;
-            }
-
-            // ? @cmyui
-            if (i > argc - 2) {
+            } else if (i > argc - 2) {
                 LogError("Invalid launch flags.");
                 break;
             }
@@ -141,7 +138,7 @@ int main(int argc, char *argv[]) {
             if (!strncmp("--mods", argv[i], 0x6)) {
                 char *mods_ascii = argv[i + 1];
 
-                while (strlen(mods_ascii) >= 0x2) {
+                while (strlen(mods_ascii) >= 0x1 && *(mods_ascii + 1)) {
                     if      (!strncmp("nf", mods_ascii, 0x2)) mods |= NoFail;
                     else if (!strncmp("ez", mods_ascii, 0x2)) mods |= Easy;
                     else if (!strncmp("hd", mods_ascii, 0x2)) mods |= Hidden;
@@ -152,16 +149,16 @@ int main(int argc, char *argv[]) {
                     else if (!strncmp("nc", mods_ascii, 0x2)) mods |= Nightcore;
                     else if (!strncmp("fl", mods_ascii, 0x2)) mods |= Flashlight;
                     else if (!strncmp("so", mods_ascii, 0x2)) mods |= SpunOut;
-                    else printf(KYEL "Invalid mod '%2s'" KRESET "\n", mods_ascii);//cannot catch 1 letter mods due to loop constraint
+                    else printf(KYEL "Invalid mod '%2s'" KRESET "\n", mods_ascii);//cannot catch 1 letter mods due to loop constraint, don't want to use an if.
                     mods_ascii += 0x2;
                 }
-                ignore++;
+                skip++;
             }
 
             // Specify specific accuracy.
             else if (!strncmp("--acc", argv[i], 0x5)) {
                 sscanf(argv[i + 1], "%f", &accuracy);
-                ignore++;
+                skip++;
             }
 
             // Specify to wipe DB.
@@ -172,13 +169,13 @@ int main(int argc, char *argv[]) {
             // Specify specific max-pp.
             else if (!strncmp("--max-pp", argv[i], 0x8)) {
                 sscanf(argv[i + 1], "%f", &MAX_PP);
-                ignore++;
+                skip++;
             }
 
             // Specify specific min-pp.
             else if (!strncmp("--min-pp", argv[i], 0x8)) {
                 sscanf(argv[i + 1], "%f", &MIN_PP);
-                ignore++;
+                skip++;
             }
         }
     }
@@ -236,9 +233,8 @@ int main(int argc, char *argv[]) {
     mysql_free_result(res);
 
     for (int i = 0; i <= row_count; i++) {
-        ezpp_t ez = ezpp_new();
-
-        if (!ez) {
+        ezpp_t ez;
+        if (!(ez = ezpp_new())) {
             LogError("Failed to load ezpp.");
             return 1;
         }
@@ -304,7 +300,6 @@ int main(int argc, char *argv[]) {
         ezpp_free(ez);
     }
 
-    mysql_free_result(res);
     mysql_close(conn);
 
     printf("\n" KGRN "Closed successfully. Execution time: %.2lf seconds." KRESET "\n", (double)(clock() - start_time) / CLOCKS_PER_SEC);
