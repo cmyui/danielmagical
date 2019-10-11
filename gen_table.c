@@ -2,8 +2,15 @@
 #include <stdio.h>
 #include <mysql/mysql.h>
 #include <stdlib.h>
+#include <time.h>
+
+#define VERBOSE 1
 
 #include </mnt/d/Development/Misc Tools/gen_table/oppai.h>
+
+char BEATMAP_FOLDER[17] = { '\0' },
+     SQL[sizeof("INSERT IGNORE INTO pp_table(id,beatmap_id,pp,star_rating,pp_ratio)VALUES(NULL,1234567,1234.123,12.12345,123);")] = { '\0' };
+
 
 // Console colours
 #define KNRM      "\x1B[0m"
@@ -16,13 +23,9 @@
 #define KGRY      "\x1B[37m"
 #define KRESET    "\033[0m"
 
-#define LogError(x) printf(KRED "ERR: " KRESET #x "\n")
-
-char BEATMAP_FOLDER[17] = { '\0' },
-     SQL[sizeof("INSERT IGNORE INTO pp_table(id,beatmap_id,pp,star_rating,pp_ratio)VALUES(NULL,1234567,1234.123,12.12345,123);")] = { '\0' };
 
 enum Mods {
-  //noMod             = 0,
+    noMod             = 0,
 	NoFail            = 1 << 0,
 	Easy              = 1 << 1,
   //NoVideo           = 1 << 2,
@@ -59,11 +62,18 @@ enum Mods {
   //TimeAltering      = DoubleTime | HalfTime | Nightcore
 };
 
+
+void LogError(const char* str) {
+    printf(KRED "ERR: " KRESET "%s" KRESET "\n", str);
+    return;
+}
+
+
 unsigned char FileExists(const char* BeatmapPath) {
     FILE *f = fopen(BeatmapPath, "r");
     if (!f) return 1;
 
-    fseek(f, 0, SEEK_END);
+    fseek(f, 0l, SEEK_END);
     const int Size = ftell(f);
 
     fclose(f);
@@ -72,14 +82,17 @@ unsigned char FileExists(const char* BeatmapPath) {
     return 0;
 }
 
+
 int main(int argc, char *argv[]) {
+    clock_t start_time = clock();
+
     char sql_user[32], sql_pass[32], sql_db[32], sql_server[32];
     { // Config
         const char delim[2] = ":";
         FILE *f = fopen("config.ini", "r");
 
         if (!f) {
-            LogError(No config file could be found!);
+            LogError("No config file could be found!");
             return 1;
         }
 
@@ -89,7 +102,7 @@ int main(int argc, char *argv[]) {
 
             { // trim newline off end
                 size_t len = strlen(line);
-                if (len > 0 && line[len-1] == '\n')
+                if (len > 0 && line[len - 1] == '\n')
                     line[--len] = '\0';
             }
 
@@ -104,7 +117,7 @@ int main(int argc, char *argv[]) {
     }
 
     // Default settings.
-    int              mods = Relax | HardRock | Hidden | DoubleTime;
+    int              mods = noMod;
     unsigned char wipe_db = 0;
     float          MAX_PP = 2750.f,
                    MIN_PP = 1000.f,
@@ -114,83 +127,74 @@ int main(int argc, char *argv[]) {
         unsigned char ignore = 0;
         for (int i = 0; i < argc; i++) {
             if (ignore) {
-                ignore = 0;
+                ignore--;
                 continue;
             }
 
-            if (i  > argc - 2) {
-                LogError(Invalid launch flags.);
+            // ? @cmyui
+            if (i > argc - 2) {
+                LogError("Invalid launch flags.");
                 break;
             }
 
             // Specify specific mod(s).
-            if (!strncmp("--mods", argv[i], 6)) {
-                mods = 0;
+            if (!strncmp("--mods", argv[i], 0x6)) {
                 char *mods_ascii = argv[i + 1];
-                const int Size = strlen(mods_ascii);
 
-                char mod[3];
-
-                for (int i = 0; i < Size; i++, i++) {
-                    sscanf(mods_ascii, "%2s", mod);
-
-                    if (strlen(mod) != 2)
-                        break;
-
-                    if      (!strncmp("nf", mod, 2)) mods |= NoFail;
-                    else if (!strncmp("ez", mod, 2)) mods |= Easy;
-                    else if (!strncmp("hd", mod, 2)) mods |= Hidden;
-                    else if (!strncmp("hr", mod, 2)) mods |= HardRock;
-                    else if (!strncmp("dt", mod, 2)) mods |= DoubleTime;
-                    else if (!strncmp("rx", mod, 2)) mods |= Relax;
-                    else if (!strncmp("ht", mod, 2)) mods |= HalfTime;
-                    else if (!strncmp("nc", mod, 2)) mods |= Nightcore;
-                    else if (!strncmp("fl", mod, 2)) mods |= Flashlight;
-                    else if (!strncmp("so", mod, 2)) mods |= SpunOut;
-                    else printf(KYEL "Invalid mod '%s'" KRESET "\n", mod);
-
-                    mods_ascii += 2;
+                while (strlen(mods_ascii) >= 0x2) {
+                    if      (!strncmp("nf", mods_ascii, 0x2)) mods |= NoFail;
+                    else if (!strncmp("ez", mods_ascii, 0x2)) mods |= Easy;
+                    else if (!strncmp("hd", mods_ascii, 0x2)) mods |= Hidden;
+                    else if (!strncmp("hr", mods_ascii, 0x2)) mods |= HardRock;
+                    else if (!strncmp("dt", mods_ascii, 0x2)) mods |= DoubleTime;
+                    else if (!strncmp("rx", mods_ascii, 0x2)) mods |= Relax;
+                    else if (!strncmp("ht", mods_ascii, 0x2)) mods |= HalfTime;
+                    else if (!strncmp("nc", mods_ascii, 0x2)) mods |= Nightcore;
+                    else if (!strncmp("fl", mods_ascii, 0x2)) mods |= Flashlight;
+                    else if (!strncmp("so", mods_ascii, 0x2)) mods |= SpunOut;
+                    else printf(KYEL "Invalid mod '%2s'" KRESET "\n", mods_ascii);//cannot catch 1 letter mods due to loop constraint
+                    mods_ascii += 0x2;
                 }
-                ignore = 1;
+                ignore++;
             }
 
             // Specify specific accuracy.
-            else if (!strncmp("--acc", argv[i], 5)) {
+            else if (!strncmp("--acc", argv[i], 0x5)) {
                 sscanf(argv[i + 1], "%f", &accuracy);
-                ignore = 1;
+                ignore++;
             }
 
             // Specify to wipe DB.
-            else if (!strncmp("--wipe-db", argv[i], 9)) {
+            else if (!strncmp("--wipe-db", argv[i], 0x9)) {
                 wipe_db = 1;
             }
 
             // Specify specific max-pp.
-            else if (!strncmp("--max-pp", argv[i], 8)) {
+            else if (!strncmp("--max-pp", argv[i], 0x8)) {
                 sscanf(argv[i + 1], "%f", &MAX_PP);
-                ignore = 1;
+                ignore++;
             }
 
             // Specify specific min-pp.
-            else if (!strncmp("--min-pp", argv[i], 8)) {
+            else if (!strncmp("--min-pp", argv[i], 0x8)) {
                 sscanf(argv[i + 1], "%f", &MIN_PP);
-                ignore = 1;
+                ignore++;
             }
         }
     }
 
     if (MAX_PP < 0.f || MIN_PP < 0.f) {
-        LogError(MAX_PP and MIN_PP must be greater than 0!);
+        LogError("MAX_PP and MIN_PP must be greater than 0!");
         return 1;
     }
 
-    if (MAX_PP < MIN_PP) {
-        LogError(MAX_PP Must be greater than MIN_PP!);
+    if (MIN_PP > MAX_PP) {
+        LogError("MAX_PP Must be greater than MIN_PP!");
         return 1;
     }
 
     if (accuracy > 100.f || accuracy < 0.f) {
-        LogError(Accuracy must be between 0 - 100!);
+        LogError("Accuracy must be between 0 - 100!");
         return 1;
     }
 
@@ -214,19 +218,19 @@ int main(int argc, char *argv[]) {
         printf(KGRN "Wiped database." KRESET "\n");
     }
 
-    if (mysql_query(conn, "SELECT beatmap_id FROM beatmaps WHERE ranked IN (-2, 2) ORDER BY beatmap_id ASC;")) {
+    if (mysql_query(conn, "SELECT beatmap_id FROM beatmaps WHERE ranked IN(-2,2)ORDER BY beatmap_id ASC;")) {
         LogError(mysql_error(conn));
         return 1;
     }
 
     res = mysql_store_result(conn);
 
-    unsigned long long row_count = mysql_num_rows(res);
+    const unsigned long long row_count = mysql_num_rows(res);
     printf(KCYN "Found %llu beatmaps matching criteria. Calculating PP values.." KRESET "\n", row_count);
 
     // Build beatmap array
     int* BeatmapArray = calloc(row_count, sizeof(int));
-    for (int i = 0; (row = mysql_fetch_row(res)) != NULL; i++)
+    for (int i = 0; (row = mysql_fetch_row(res)); i++)
         BeatmapArray[i] = atoi(row[0]);
 
     mysql_free_result(res);
@@ -235,7 +239,7 @@ int main(int argc, char *argv[]) {
         ezpp_t ez = ezpp_new();
 
         if (!ez) {
-            LogError(Failed to load ezpp.);
+            LogError("Failed to load ezpp.");
             return 1;
         }
 
@@ -281,6 +285,7 @@ int main(int argc, char *argv[]) {
                 return 1;
             }
 
+#if VERBOSE
             printf(
                 "\n" KGRN
                 "Accepted value." KRESET "\n"
@@ -293,6 +298,7 @@ int main(int argc, char *argv[]) {
                 ez->stars,
                 pp_ratio
             );
+#endif
         }
 
         ezpp_free(ez);
@@ -301,6 +307,6 @@ int main(int argc, char *argv[]) {
     mysql_free_result(res);
     mysql_close(conn);
 
-    printf("\n" KGRN "Closed successfully." KRESET "\n");
+    printf("\n" KGRN "Closed successfully. Execution time: %.2lf seconds." KRESET "\n", (double)(clock() - start_time) / CLOCKS_PER_SEC);
     return 0;
 }
