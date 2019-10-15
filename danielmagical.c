@@ -3,10 +3,10 @@
 #include <mysql/mysql.h>
 #include <stdlib.h>
 #include <time.h>
+#include "oppai.h"
 
+// "Quiets" the program if disabled..
 #define VERBOSE 1
-
-#include </mnt/d/Development/Misc Tools/gen_table/oppai.h>
 
 char BEATMAP_FOLDER[17] = { '\0' },
      SQL[sizeof("INSERT IGNORE INTO pp_table(id,beatmap_id,pp,star_rating,pp_ratio)VALUES(NULL,1234567,1234.123,12.12345,123);")] = { '\0' };
