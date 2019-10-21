@@ -2,7 +2,6 @@
 #include <stdio.h>
 #include <mysql/mysql.h>
 #include <stdlib.h>
-#include <time.h>
 #include "oppai.h"
 
 // "Quiets" the program if disabled..
@@ -39,15 +38,14 @@ enum Mods {
     Nightcore   = 1 << 9,
     Flashlight  = 1 << 10,
     SpunOut     = 1 << 12,
-  //Relax2      = 1 << 13,
+    //Relax2      = 1 << 13,
 };
 
 
 void LogError(const char* str) {
-    printf(KRED "ERR: " KRESET "%s" KRESET "\n", str);
+    printf(KRED "ERR:" KRESET " %s" KRESET "\n", str);
     return;
 }
-
 
 unsigned char FileExists(const char* BeatmapPath) {
     FILE *f = fopen(BeatmapPath, "r");
@@ -64,8 +62,6 @@ unsigned char FileExists(const char* BeatmapPath) {
 
 
 int main(int argc, char *argv[]) {
-    clock_t start_time = clock();
-
     char sql_user[32], sql_pass[32], sql_db[32], sql_server[32];
     { // Config
         const char delim[2] = ":";
@@ -105,9 +101,9 @@ int main(int argc, char *argv[]) {
 
     { // Launch flags.
         unsigned char skip = 0;
-        for (int i = 0; i < argc; i++) {
+        for (int i = 1; i < argc; i++) {
             if (skip) {
-                skip--;
+                skip = skip - 1;
                 continue;
             } else if (i > argc - 2) {
                 LogError("Invalid launch flags.");
@@ -118,7 +114,7 @@ int main(int argc, char *argv[]) {
             if (!strncmp("--mods", argv[i], 0x6)) {
                 char *mods_ascii = argv[i + 1];
 
-                while (strlen(mods_ascii) >= 0x1 && *(mods_ascii + 1)) {
+                while (strlen(mods_ascii) >= 0x1 && *(mods_ascii + 0x1)) {
                     if      (!strncmp("nf", mods_ascii, 0x2)) mods |= NoFail;
                     else if (!strncmp("ez", mods_ascii, 0x2)) mods |= Easy;
                     else if (!strncmp("hd", mods_ascii, 0x2)) mods |= Hidden;
@@ -132,31 +128,30 @@ int main(int argc, char *argv[]) {
                     else printf(KYEL "Invalid mod '%2s'" KRESET "\n", mods_ascii);//cannot catch 1 letter mods due to loop constraint, don't want to use an if.
                     mods_ascii += 0x2;
                 }
-                skip++;
+                skip = skip - 1;
             }
 
             // Specify specific accuracy.
-            else if (!strncmp("--acc", argv[i], 0x5)) {
+            else if (!strncmp("--acc", argv[i], 0x5))
                 sscanf(argv[i + 1], "%f", &accuracy);
-                skip++;
-            }
 
             // Specify to wipe DB.
             else if (!strncmp("--wipe-db", argv[i], 0x9)) {
-                wipe_db = 1;
+                wipe_db = wipe_db - 1;
+                continue;
             }
 
             // Specify specific max-pp.
-            else if (!strncmp("--max-pp", argv[i], 0x8)) {
+            else if (!strncmp("--max-pp", argv[i], 0x8))
                 sscanf(argv[i + 1], "%f", &MAX_PP);
-                skip++;
-            }
 
             // Specify specific min-pp.
-            else if (!strncmp("--min-pp", argv[i], 0x8)) {
+            else if (!strncmp("--min-pp", argv[i], 0x8))
                 sscanf(argv[i + 1], "%f", &MIN_PP);
-                skip++;
-            }
+
+            else printf("Invalid option " KYEL "%s" KRESET "\n", argv[i]);
+
+            skip = skip - 1;
         }
     }
 
@@ -175,7 +170,13 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    printf(KYEL "Settings:\n" KCYN "Mods: %i\nAccuracy: %.2f\nMax PP: %.2f\nMin PP: %.2f" KRESET "\n\n", mods, accuracy, MAX_PP, MIN_PP);
+    printf(KYEL "Settings:\n"
+           KCYN "Mods: %d\n"
+                "Accuracy: %.2f\n"
+                "Max PP: %.2f\n"
+                "Min PP: %.2f"
+           KRESET "\n\n",
+           mods, accuracy, MAX_PP, MIN_PP);
 
     MYSQL *conn;
     MYSQL_RES *res;
@@ -195,7 +196,7 @@ int main(int argc, char *argv[]) {
         printf(KGRN "Wiped database." KRESET "\n");
     }
 
-    if (mysql_query(conn, "SELECT beatmap_id FROM beatmaps WHERE ranked IN(-2,2)ORDER BY beatmap_id ASC;")) {
+    if (mysql_query(conn, "SELECT beatmap_id FROM beatmaps WHERE ranked=2 ORDER BY beatmap_id ASC;")) {
         LogError(mysql_error(conn));
         return 1;
     }
@@ -228,7 +229,9 @@ int main(int argc, char *argv[]) {
         ezpp_set_combo            (ez, 0);
         */
 
-        snprintf(BEATMAP_FOLDER, sizeof(BEATMAP_FOLDER), "maps/%7i.osu", BeatmapArray[i]);
+        snprintf(BEATMAP_FOLDER, sizeof(BEATMAP_FOLDER),
+                 "maps/%7d.osu",
+                 BeatmapArray[i]);
 
         if (FileExists(BEATMAP_FOLDER)) {
             ezpp_free(ez);
@@ -246,15 +249,9 @@ int main(int argc, char *argv[]) {
         { // Accepted val
             int pp_ratio = (int)((ez->speed_pp / (ez->aim_pp + ez->speed_pp + ez->acc_pp)) * 100); // In Akatsuki pp, ez->speed_pp isnt part of ez->pp.
 
-            snprintf(
-                SQL,
-                sizeof(SQL),
-                "INSERT IGNORE INTO pp_table(id,beatmap_id,pp,star_rating,pp_ratio)VALUES(NULL,%7i,%8.3f,%8.5f,%3i);",
-                BeatmapArray[i],
-                ez->pp,
-                ez->stars,
-                pp_ratio
-            );
+            snprintf(SQL, sizeof(SQL),
+                     "INSERT IGNORE INTO pp_table(id,beatmap_id,pp,star_rating,pp_ratio)VALUES(NULL,%7d,%8.3f,%8.5f,%3d);",
+                     BeatmapArray[i], ez->pp, ez->stars, pp_ratio);
 
             if (mysql_query(conn, SQL)) {
                 LogError(mysql_error(conn));
@@ -262,18 +259,14 @@ int main(int argc, char *argv[]) {
             }
 
 #if VERBOSE
-            printf(
-                "\n" KGRN
-                "Accepted value." KRESET "\n"
-                "Beatmap ID: %i\n"
-                "PP: %.3fpp\n"
-                "Star Rating: %.5f*\n"
-                "Stream pp: %i%%\n",
-                BeatmapArray[i],
-                ez->pp,
-                ez->stars,
-                pp_ratio
-            );
+            printf("\n"
+                   KGRN   "Accepted value."
+                   KRESET "\n"
+                          "Beatmap ID: %d\n"
+                          "PP: %.3fpp\n"
+                          "Star Rating: %.5f*\n"
+                          "Stream pp: %d%%\n",
+                   BeatmapArray[i], ez->pp, ez->stars, pp_ratio);
 #endif
         }
 
@@ -282,6 +275,6 @@ int main(int argc, char *argv[]) {
 
     mysql_close(conn);
 
-    printf("\n" KGRN "Closed successfully. Execution time: %.2lf seconds." KRESET "\n", (double)(clock() - start_time) / CLOCKS_PER_SEC);
+    printf("\n" KGRN "Closed successfully." KRESET "\n");
     return 0;
 }
