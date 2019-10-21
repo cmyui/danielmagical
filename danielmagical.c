@@ -7,7 +7,7 @@
 // "Quiets" the program if disabled..
 #define VERBOSE 1
 
-#define SQL_MAX_LEN sizeof("INSERT IGNORE INTO pp_table(id,beatmap_id,pp,star_rating,pp_ratio)VALUES(NULL,1234567,1234.123,12.12345,123);")
+#define SQL_MAX_LEN sizeof("INSERT INTO pp_table(id,beatmap_id,pp,star_rating,pp_ratio)VALUES(NULL,1234567,1234.123,12.12345,123);")
 
 char BEATMAP_FOLDER[17] = {'\0'},
      SQL[SQL_MAX_LEN]   = {'\0'};
@@ -128,7 +128,6 @@ int main(int argc, char *argv[]) {
                     else printf(KYEL "Invalid mod '%2s'" KRESET "\n", mods_ascii);//cannot catch 1 letter mods due to loop constraint, don't want to use an if.
                     mods_ascii += 0x2;
                 }
-                skip = 1 - skip;
             }
 
             // Specify specific accuracy.
@@ -247,10 +246,10 @@ int main(int argc, char *argv[]) {
         }
 
         { // Accepted val
-            int pp_ratio = (int)((ez->speed_pp / (ez->aim_pp + ez->speed_pp + ez->acc_pp)) * 100); // In Akatsuki pp, ez->speed_pp isnt part of ez->pp.
+            int pp_ratio = (ez->speed_pp / (ez->aim_pp + ez->speed_pp + ez->acc_pp)) * 100; // In Akatsuki pp, ez->speed_pp isnt part of ez->pp.
 
             snprintf(SQL, sizeof(SQL),
-                     "INSERT IGNORE INTO pp_table(id,beatmap_id,pp,star_rating,pp_ratio)VALUES(NULL,%7d,%8.3f,%8.5f,%3d);",
+                     "INSERT INTO pp_table(id,beatmap_id,pp,star_rating,pp_ratio)VALUES(NULL,%7d,%8.3f,%8.5f,%3d);",
                      BeatmapArray[i], ez->pp, ez->stars, pp_ratio);
 
             if (mysql_query(conn, SQL)) {
