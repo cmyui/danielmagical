@@ -103,7 +103,7 @@ int main(int argc, char *argv[]) {
         unsigned char skip = 0;
         for (int i = 1; i < argc; i++) {
             if (skip) {
-                skip = skip - 1;
+                skip = 1 - skip;
                 continue;
             } else if (i > argc - 2) {
                 LogError("Invalid launch flags.");
@@ -128,7 +128,7 @@ int main(int argc, char *argv[]) {
                     else printf(KYEL "Invalid mod '%2s'" KRESET "\n", mods_ascii);//cannot catch 1 letter mods due to loop constraint, don't want to use an if.
                     mods_ascii += 0x2;
                 }
-                skip = skip - 1;
+                skip = 1 - skip;
             }
 
             // Specify specific accuracy.
@@ -137,7 +137,7 @@ int main(int argc, char *argv[]) {
 
             // Specify to wipe DB.
             else if (!strncmp("--wipe-db", argv[i], 0x9)) {
-                wipe_db = wipe_db - 1;
+                wipe_db = 1 - wipe_db;
                 continue;
             }
 
@@ -151,7 +151,7 @@ int main(int argc, char *argv[]) {
 
             else printf("Invalid option " KYEL "%s" KRESET "\n", argv[i]);
 
-            skip = skip - 1;
+            skip = 1 - skip;
         }
     }
 
